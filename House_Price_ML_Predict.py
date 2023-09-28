@@ -47,15 +47,15 @@ for col in df.columns:
         df[col] = pd.to_datetime(df[col])
 
 df['dateSold'] = df['YrSold'].astype(str) + '-' + df['MoSold'].astype(str) + '-01'
-
 df['dateSold'] = pd.to_datetime(df['dateSold'])
-
 df['dateSold'] = df['dateSold'].dt.strftime('%Y-%m-%d')
-
 df['dateSold'] = pd.to_datetime(df['dateSold'])
+
+df["GarageYrBlt"] = pd.to_datetime(df["GarageYrBlt"])
+df['GarageYrBlt'] = df['GarageYrBlt'].dt.strftime('%Y-%m-%d')
+df['GarageYrBlt'] = pd.to_datetime(df['GarageYrBlt'])
 
 df.drop("YrSold", axis=1, inplace=True)
-
 df.drop("MoSold", axis=1, inplace=True)
 
 
@@ -173,6 +173,12 @@ def missing_values_table(dataframe, na_name=False):
         return na_columns
 
 missing_values_table(df)
+
+
+df.drop(["POOLQC", "MISCFEATURE", "ALLEY", "FENCE", "FIREPLACEQU", "LOTFRONTAGE"], axis=1, inplace=True)
+
+df.dropna(inplace=True)
+
 
 
 
