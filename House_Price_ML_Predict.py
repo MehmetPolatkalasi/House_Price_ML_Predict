@@ -177,7 +177,7 @@ missing_values_table(df)
 
 df.drop(["POOLQC", "MISCFEATURE", "ALLEY", "FENCE", "FIREPLACEQU", "LOTFRONTAGE"], axis=1, inplace=True)
 
-df.dropna(inplace=True)
+df.dropna(inplace=True) #
 
 
 
