@@ -2,16 +2,16 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, AdaBoostClassifier
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingClassifier, AdaBoostRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_validate, GridSearchCV
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from catboost import CatBoostClassifier
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from catboost import CatBoostRegressor
 
 pd.set_option('display.max_columns', 20)
 pd.set_option('display.width', None)
@@ -55,8 +55,6 @@ df["GarageYrBlt"] = pd.to_datetime(df["GarageYrBlt"])
 df['GarageYrBlt'] = df['GarageYrBlt'].dt.strftime('%Y-%m-%d')
 df['GarageYrBlt'] = pd.to_datetime(df['GarageYrBlt'])
 
-df.drop("YrSold", axis=1, inplace=True)
-df.drop("MoSold", axis=1, inplace=True)
 
 
 def grab_col_names(dataframe, cat_th=10, car_th=20):
@@ -177,7 +175,98 @@ missing_values_table(df)
 
 df.drop(["POOLQC", "MISCFEATURE", "ALLEY", "FENCE", "FIREPLACEQU", "LOTFRONTAGE"], axis=1, inplace=True)
 
-df.dropna(inplace=True) #
+df.dropna(inplace=True)
+
+df["MOSOLD_CAT"] = None
+df.loc[df["MOSOLD"] == 12, "MOSOLD_CAT"] = "winter"
+df.loc[df["MOSOLD"] < 3, "MOSOLD_CAT"] = "winter"
+df.loc[(df["MOSOLD"] >= 3) & (df["MOSOLD"] <= 5), "MOSOLD_CAT"] = "spring"
+df.loc[(df["MOSOLD"] > 5) & (df["MOSOLD"] <= 8), "MOSOLD_CAT"] = "summer"
+df.loc[(df["MOSOLD"] > 8) & (df["MOSOLD"] <= 11), "MOSOLD_CAT"] = "autumn"
+
+cat_cols, num_cols, cat_but_car = grab_col_names(df, cat_th=5)
+
+for col in cat_cols:
+    cat_summary(df, col)
+
+cat_cols = [col for col in cat_cols if "SALEPRICE" not in col]
+
+
+def one_hot_encoder(dataframe, categorical_cols, drop_first=False):
+    dataframe = pd.get_dummies(dataframe, columns=categorical_cols, drop_first=drop_first)
+    return dataframe
+
+df = one_hot_encoder(df, cat_cols, drop_first=True)
+check_df(df)
+df.columns = [col.upper() for col in df.columns]
+
+cat_cols, num_cols, cat_but_car = grab_col_names(df, cat_th=5)
+cat_cols = [col for col in cat_cols if "SALEPRICE" not in col]
+
+
+def outlier_thresholds(dataframe, col_name, q1=0.05, q3=0.95):
+    quartile1 = dataframe[col_name].quantile(q1)
+    quartile3 = dataframe[col_name].quantile(q3)
+    interquantile_range = quartile3 - quartile1
+    up_limit = quartile3 + 1.5 * interquantile_range
+    low_limit = quartile1 - 1.5 * interquantile_range
+    return low_limit, up_limit
+
+def check_outlier(dataframe, col_name):
+    low_limit, up_limit = outlier_thresholds(dataframe, col_name)
+    if dataframe[(dataframe[col_name] > up_limit) | (dataframe[col_name] < low_limit)].any(axis=None):
+        return True
+    else:
+        return False
+
+for col in num_cols:
+    print(col, check_outlier(df, col))
+
+def replace_with_threshoulds(dataframe, variable):
+    low_limit, up_limit = outlier_thresholds(dataframe, variable)
+    dataframe.loc[(dataframe[variable] < low_limit), variable] = low_limit
+    dataframe.loc[(dataframe[variable] > up_limit), variable] = up_limit
+
+for col in num_cols:
+    replace_with_threshoulds(df, col)
+
+
+X_scaled = StandardScaler().fit_transform(df[num_cols])
+df[num_cols] = pd.DataFrame(X_scaled, columns=df[num_cols].columns)
+
+check_df(df)
+missing_values_table(df)
+df.dropna(inplace=True)
+
+
+y = df["SALEPRICE"]
+X = df.drop(["SALEPRICE", "NEIGHBORHOOD"], axis=1)
+
+
+#######################################################################
+# 3. Base Model
+#######################################################################
+def base_models(X, y, scoring="neg_mean_squared_error"):
+    print("Base Models....")
+    regressors = [("LR", LogisticRegression()),
+                  ("KNN", KNeighborsRegressor()),
+                  ("SVC", SVC()),
+                  ("CART", DecisionTreeRegressor()),
+                  ("RF", RandomForestRegressor()),
+                  ("Adaboost", AdaBoostRegressor()),
+                  ("GBM", GradientBoostingRegressor()),
+                  ("XGBoost", XGBRegressor()),
+                  ("LightGBM", LGBMRegressor(verbose=-1)),
+                  # ("CatBoost", CatBoostRegressor(verbose=False))
+                  ]
+
+    for name, regressor in regressors:
+        cv_results = cross_validate(regressor, X, y, cv=3, scoring=scoring)
+        print(f"{scoring}: {round(cv_results['test_score'].mean(), 4)} ({name}) ")
+
+base_models(X, y)
+df.dtypes
+
 
 
 
